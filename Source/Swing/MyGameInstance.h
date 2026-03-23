@@ -1,0 +1,40 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/GameInstance.h"
+#include "Tickable.h"
+#include "MyGameInstance.generated.h"
+
+//前方宣言
+class APlayerChara;
+class USplineComponent;
+class AThirdPersonCamera;
+
+/**
+ * 
+ */
+UCLASS()
+class SWING_API UMyGameInstance : public UGameInstance , public FTickableGameObject
+{
+	GENERATED_BODY()
+
+public:
+	//プレイヤー設定・取得
+	void SetPlayer(APlayerChara* _Player);
+	UFUNCTION(BlueprintCallable)
+	APlayerChara* GetPlayer() const;
+
+	//コーススプラインの設定・取得
+	UFUNCTION(BlueprintCallable)
+	void SetCourseSpline(USplineComponent* _Spline);
+	USplineComponent* GetCourseSpline() const;
+
+	void Tick(float DeltaTime) override;
+	TStatId GetStatId() const override;
+	
+public:
+	APlayerChara* m_pPlayer;	//プレイヤー
+	USplineComponent* m_pCourseSpline;	//コースのスプライン
+};
