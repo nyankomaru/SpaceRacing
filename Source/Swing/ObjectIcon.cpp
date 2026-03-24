@@ -1,21 +1,34 @@
-// ObjectIcon.cpp
 #include "ObjectIcon.h"
+
+// =========================
+// コンストラクタ
+// =========================
 
 AObjectIcon::AObjectIcon()
 {
+	// ミニマップ上の表示更新を毎フレーム行う
 	PrimaryActorTick.bCanEverTick = true;
 
+	// 表示用メッシュを作成
 	IconMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("IconMesh"));
 	RootComponent = IconMesh;
 
-	// 初期スケールは固定（例）
+	// アイコンサイズは固定
 	IconMesh->SetWorldScale3D(FVector(0.5f));
 }
+
+// =========================
+// 開始時処理
+// =========================
 
 void AObjectIcon::BeginPlay()
 {
 	Super::BeginPlay();
 }
+
+// =========================
+// 毎フレーム更新
+// =========================
 
 void AObjectIcon::Tick(float DeltaTime)
 {
@@ -24,15 +37,20 @@ void AObjectIcon::Tick(float DeltaTime)
 	UpdateIconTransform();
 }
 
+// =========================
+// ミニマップ座標計算
+// =========================
+
 FVector2D AObjectIcon::GetMinimapPosition() const
 {
-	// XY位置だけ取り出し
-	FVector2D Center2D(MinimapCenter.X, MinimapCenter.Y);
-	FVector2D Planet2D(PlanetWorldPosition.X, PlanetWorldPosition.Y);
+	// XY平面上の位置だけを使う
+	const FVector2D Center2D(MinimapCenter.X, MinimapCenter.Y);
+	const FVector2D Planet2D(PlanetWorldPosition.X, PlanetWorldPosition.Y);
 
-	FVector2D Relative = (Planet2D - Center2D) * MinimapScale;
+	// ミニマップ中心から見た相対位置をスケール反映込みで計算
+	const FVector2D Relative = (Planet2D - Center2D) * MinimapScale;
 
-	// Z回転（Yaw）だけ適用
+	// Yaw回転を適用してミニマップ座標へ変換
 	const float Rad = FMath::DegreesToRadians(MinimapYaw);
 	const float Cos = FMath::Cos(Rad);
 	const float Sin = FMath::Sin(Rad);
@@ -48,18 +66,22 @@ float AObjectIcon::GetMinimapYaw() const
 	return MinimapYaw;
 }
 
+// =========================
+// アイコン表示更新
+// =========================
+
 void AObjectIcon::UpdateIconTransform()
 {
-	// 2Dミニマップ座標に基づく3D位置を作成（Zは惑星の絶対高さを使う）
-	FVector2D MiniPos = GetMinimapPosition();
-	FVector NewLocation(MiniPos.X, MiniPos.Y, PlanetWorldPosition.Z);
+	// ミニマップ上の2D座標を3D空間上の位置に変換
+	const FVector2D MiniPos = GetMinimapPosition();
+	const FVector NewLocation(MiniPos.X, MiniPos.Y, PlanetWorldPosition.Z);
 
 	SetActorLocation(NewLocation);
 
-	// ミニマップ回転（Yawのみ）
-	FRotator NewRotation(0.f, GetMinimapYaw(), 0.f);
+	// アイコンの向きはミニマップのYawに合わせる
+	const FRotator NewRotation(0.0f, GetMinimapYaw(), 0.0f);
 	SetActorRotation(NewRotation);
 
-	// サイズは常に一定（必要に応じて更新）
+	// サイズは常に一定にする
 	IconMesh->SetWorldScale3D(FVector(0.5f));
 }

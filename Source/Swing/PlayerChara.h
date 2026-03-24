@@ -1,25 +1,36 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "MyPawn.h"
-
-// 変更箇所（Audio）
 #include "Components/AudioComponent.h"
 #include "Sound/SoundBase.h"
-
 #include "PlayerChara.generated.h"
 
 // 前方宣言
 class UCapsuleComponent;
 class USpringArmComponent;
 class UCameraComponent;
-class APlanet;
+class UStaticMeshComponent;
 class UFloatingPawnMovement;
 class USplineComponent;
+class APlanet;
 class AMyCamera;
 
+/**
+ * プレイヤーキャラクタークラス
+ *
+ * 主な役割：
+ * ・プレイヤーの移動、回転、速度制御
+ * ・カメラ追従や視野角制御
+ * ・コース（Spline）に沿った進行制御
+ * ・進捗UI用の進行度計算
+ * ・エンジン音、回転音などのAudio制御
+ *
+ * 補足：
+ * 本クラスは複数機能をまとめて持つプレイヤー基盤クラスであり、
+ * UI進行度表示とAudio周りは主担当として調整・整理を行っている。
+ * それ以外の既存処理についても、全体の見通しをよくする目的で構造を整理している。
+ */
 UCLASS()
 class SWING_API APlayerChara : public AMyPawn
 {
@@ -28,23 +39,45 @@ class SWING_API APlayerChara : public AMyPawn
 public:
 	APlayerChara();
 
-	void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-	void Tick(float DeltaTime) override;
+public:
+	// =========================
+	// Engine Override
+	// =========================
 
-protected:
-	void BeginPlay() override;
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 public:
-	// オーバーラップ時
-	UFUNCTION()
-	void OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp,
-		int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+	// =========================
+	// Overlap
+	// =========================
 
+	/** オーバーラップ開始時 */
 	UFUNCTION()
-	void OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp,
-		int32 OtherBodyIndex);
+	void OnOverlapBegin(
+		UPrimitiveComponent* OverlappedComp,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex,
+		bool bFromSweep,
+		const FHitResult& SweepResult
+	);
+
+	/** オーバーラップ終了時 */
+	UFUNCTION()
+	void OnOverlapEnd(
+		UPrimitiveComponent* OverlappedComp,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex
+	);
 
 public:
+	// =========================
+	// Public Utility
+	// =========================
+
 	UFUNCTION(BlueprintCallable)
 	void AddSocket(AActor* _p, FVector _Pos, bool _bRot = false);
 
@@ -59,6 +92,7 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	float GetSpeed();
+
 	UFUNCTION(BlueprintCallable)
 	float GetMaxSpeed();
 
@@ -72,23 +106,36 @@ public:
 
 	UPrimitiveComponent* GetSpline() const;
 
-	//状態の強制変更（スタート時に使う）
+	/** 開始位置・回転・速度を強制設定する */
 	UFUNCTION(BlueprintCallable)
-	void SetStart(FVector _Loc,FRotator _Rot,float _Speed);
+	void SetStart(FVector _Loc, FRotator _Rot, float _Speed);
+
+	/** 現在速度を減算する */
 	void SubSpeed(float _Rate);
 
-	// --- 進捗UI用（Blueprintから取得） ---
+public:
+	// =========================
+	// Course UI
+	// 主担当：進行度表示用
+	// =========================
+
+	/** コース進行度を 0.0 ～ 1.0 で返す */
 	UFUNCTION(BlueprintPure, Category = "Course|UI")
 	float GetCourseProgress01() const;
 
+	/** ゴールまでの残り距離を返す */
 	UFUNCTION(BlueprintPure, Category = "Course|UI")
 	float GetCourseRemainingDistance() const;
 
+	/** 逆走中かどうかを返す */
 	UFUNCTION(BlueprintPure, Category = "Course|UI")
 	bool IsReverseOnCourse() const;
 
 private:
-	// 更新
+	// =========================
+	// Update
+	// =========================
+
 	void UpdateRotation(float DeltaTime);
 	void UpdateMove(float DeltaTime);
 
@@ -98,13 +145,14 @@ private:
 	void UpdateCameraFOV(float DeltaTime);
 
 	void UpdateSocket();
-
+	void UpdateCourseProgress(float DeltaTime);
 	void ValueReset();
 
-	void UpdateCourseProgress(float DeltaTime);
-
 private:
-	// 入力
+	// =========================
+	// Input
+	// =========================
+
 	void MoveForward(float _value);
 	void Deceleration(float _value);
 
@@ -120,161 +168,223 @@ private:
 	void ChangeCamCon();
 	void ChangeAutoRot();
 
+private:
 	// =========================
-	// 変更箇所：SE（Audio）
+	// Audio Update
+	// 主担当：BGM / Audio 関連
 	// =========================
+
 	void UpdateEngineAudio(float DeltaTime);
 	void UpdateRotateAudio(float DeltaTime);
 
 private:
-	// コリジョン
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Collision, meta = (AllowPrivateAccess = "true"))
-	UCapsuleComponent* m_pMainCollision;
+	// =========================
+	// Collision / Mesh
+	// =========================
 
-	// メッシュ
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Mesh, meta = (AllowPrivateAccess = "true"))
-	UStaticMeshComponent* m_pMesh;
+	/** メインコリジョン */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Collision", meta = (AllowPrivateAccess = "true"))
+	UCapsuleComponent* m_pMainCollision = nullptr;
 
+	/** プレイヤーメッシュ */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mesh", meta = (AllowPrivateAccess = "true"))
+	UStaticMeshComponent* m_pMesh = nullptr;
 
-	//=======================
-	//カメラ関係
-	//=======================
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	USpringArmComponent* m_pSpring;		// スプリングアーム
+private:
+	// =========================
+	// Camera
+	// =========================
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	FVector m_DefaAddSpringPos;			//通常のスプリングアームの位置
+	/** スプリングアーム */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	USpringArmComponent* m_pSpring = nullptr;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	UCameraComponent* m_pCamera;		//カメラ
+	/** 通常時のスプリングアーム位置 */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	FVector m_DefaAddSpringPos;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	FRotator m_DefaCameraRot;			//通常時のカメラの傾き
+	/** メインカメラ */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	UCameraComponent* m_pCamera = nullptr;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	float m_CameraRotSpeed;				//カメラの回転速度
+	/** 通常時のカメラ角度 */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	FRotator m_DefaCameraRot;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	float m_CameraReturnRotSpeed;		//カメラが通常の向きの戻る時の速度
+	/** カメラ回転速度 */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float m_CameraRotSpeed = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	float m_CameraLagDistanceSpeed;		//カメラとの距離が変化する速度
+	/** カメラ復帰速度 */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float m_CameraReturnRotSpeed = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	float m_CameraLagMaxDistance;		//カメラとの最大距離
+	/** カメラ距離変化速度 */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float m_CameraLagDistanceSpeed = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	float m_DefaFOV;					//通常の視野角
+	/** カメラ最大距離 */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float m_CameraLagMaxDistance = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	float m_MaxAddFOV;					//速度により追加する視野角の最大値
+	/** 通常FOV */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float m_DefaFOV = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	float m_SpeedUpFOV;					//入力直後に追加する視野角
+	/** 追加FOV最大値 */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float m_MaxAddFOV = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	float m_DefaAddFOVSpeed;			//通常時の視野角の変化速度
+	/** 加速時追加FOV */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float m_SpeedUpFOV = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	float m_SpeedUpAddFOVSpeed;			//入力直後の視野角の変化速度
+	/** 通常時FOV変化速度 */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float m_DefaAddFOVSpeed = 0.0f;
 
-	//=======================
-	//移動関係
-	//=======================
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Move, meta = (AllowPrivateAccess = "true"))
-	UFloatingPawnMovement* m_pMovement;	//移動コンポーネント
+	/** 加速時FOV変化速度 */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float m_SpeedUpAddFOVSpeed = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Move, meta = (AllowPrivateAccess = "true"))
-	float m_ForwardSpeed;				//前進速度
+private:
+	// =========================
+	// Move
+	// =========================
 
-	UPROPERTY(EditAnywhere, Category = Move, meta = (AllowPrivateAccess = "true"))
-	float m_ReturnCourseSpeed;			//コースに戻る速度
+	/** 移動コンポーネント */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Move", meta = (AllowPrivateAccess = "true"))
+	UFloatingPawnMovement* m_pMovement = nullptr;
 
-	UPROPERTY(EditAnywhere, Category = Move, meta = (AllowPrivateAccess = "true"))
-	float m_MinReturnCourseSpeed;		//コースに戻る最低速度
+	/** 前進速度 */
+	UPROPERTY(EditAnywhere, Category = "Move", meta = (AllowPrivateAccess = "true"))
+	float m_ForwardSpeed = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Move, meta = (AllowPrivateAccess = "true"))
-	float M_CourseOutRate;				//コースアウト時の減速率
+	/** コース復帰速度 */
+	UPROPERTY(EditAnywhere, Category = "Move", meta = (AllowPrivateAccess = "true"))
+	float m_ReturnCourseSpeed = 0.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Input, meta = (AllowPrivateAccess = "true"))
-	float m_ForwardInput;
+	/** コース復帰最低速度 */
+	UPROPERTY(EditAnywhere, Category = "Move", meta = (AllowPrivateAccess = "true"))
+	float m_MinReturnCourseSpeed = 0.0f;
 
+	/** コースアウト時減速率 */
+	UPROPERTY(EditAnywhere, Category = "Move", meta = (AllowPrivateAccess = "true"))
+	float M_CourseOutRate = 0.0f;
 
-	//=======================
-	//回転関係
-	//=======================
-	UPROPERTY(EditAnywhere, Category = Rotation, meta = (AllowPrivateAccess = "true"))
-	float m_MaxRotSpeed;				//最高回転速度
+	/** 前進入力値 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input", meta = (AllowPrivateAccess = "true"))
+	float m_ForwardInput = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Rotation, meta = (AllowPrivateAccess = "true"))
-	float m_ReachMaxRotSpeed;			//最高回転速度に達する速度
+private:
+	// =========================
+	// Rotation
+	// =========================
 
-	UPROPERTY(EditAnywhere, Category = Rotation, meta = (AllowPrivateAccess = "true"))
-	float m_ReturnRotSpeed;				//進行方向に向きを合わせに行く速度
+	/** 最大回転速度 */
+	UPROPERTY(EditAnywhere, Category = "Rotation", meta = (AllowPrivateAccess = "true"))
+	float m_MaxRotSpeed = 0.0f;
 
-	UPROPERTY(EditAnywhere, Category = Rotation, meta = (AllowPrivateAccess = "true"))
-	FVector m_RotPivot;					//回転時の中心
+	/** 最大回転速度に達する基準速度 */
+	UPROPERTY(EditAnywhere, Category = "Rotation", meta = (AllowPrivateAccess = "true"))
+	float m_ReachMaxRotSpeed = 0.0f;
 
-	// スプライン
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Course, meta = (AllowPrivateAccess = "true"))
-	USplineComponent* m_pSpline;
+	/** 進行方向へ戻る回転速度 */
+	UPROPERTY(EditAnywhere, Category = "Rotation", meta = (AllowPrivateAccess = "true"))
+	float m_ReturnRotSpeed = 0.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Course, meta = (AllowPrivateAccess = "true"))
-	float m_ReturnCourseLen;
+	/** 回転中心 */
+	UPROPERTY(EditAnywhere, Category = "Rotation", meta = (AllowPrivateAccess = "true"))
+	FVector m_RotPivot;
 
-	//=======================
-	// 進捗UI（Course Progress） ★ここを追加
-	//=======================
-	float m_SplineLen = 0.0f;        // 全長
-	float m_CourseS = 0.0f;          // 現在s（0..Len）
-	float m_CourseSPrev = 0.0f;      // 前フレームs（飛び対策）
-	float m_CourseSBest = 0.0f;      // 最大到達s（ゲージ戻さない）
-	float m_CourseSDisplay = 0.0f;   // 表示用（平滑化）
-	bool  m_bReverse = false;        // 逆走フラグ
+private:
+	// =========================
+	// Course / Spline
+	// =========================
 
+	/** コーススプライン */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Course", meta = (AllowPrivateAccess = "true"))
+	USplineComponent* m_pSpline = nullptr;
+
+	/** コース復帰距離 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Course", meta = (AllowPrivateAccess = "true"))
+	float m_ReturnCourseLen = 0.0f;
+
+private:
+	// =========================
+	// Course UI Parameter
+	// 主担当：進行度表示用
+	// =========================
+
+	/** コース全長 */
+	float m_SplineLen = 0.0f;
+
+	/** 現在のスプライン距離 */
+	float m_CourseS = 0.0f;
+
+	/** 前フレームのスプライン距離 */
+	float m_CourseSPrev = 0.0f;
+
+	/** 最大到達距離（ゲージを戻さない用） */
+	float m_CourseSBest = 0.0f;
+
+	/** UI表示用の平滑化距離 */
+	float m_CourseSDisplay = 0.0f;
+
+	/** 逆走中かどうか */
+	bool m_bReverse = false;
+
+	/** 距離ジャンプ判定しきい値 */
 	UPROPERTY(EditAnywhere, Category = "Course|UI", meta = (AllowPrivateAccess = "true"))
 	float m_CourseJumpLimit = 8000.0f;
 
+	/** UI補間速度 */
 	UPROPERTY(EditAnywhere, Category = "Course|UI", meta = (AllowPrivateAccess = "true"))
 	float m_CourseUIInterp = 8.0f;
 
+private:
 	// =========================
-	// 変更箇所：Audio 実体（C++のみで生成）
+	// Audio Component
+	// 主担当：BGM / Audio 関連
 	// =========================
 
-	// ★2レイヤー：低域エンジン
+	/** 低域エンジン音 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Audio", meta = (AllowPrivateAccess = "true"))
 	UAudioComponent* EngineAudioLow = nullptr;
 
-	// ★2レイヤー：高域エンジン
+	/** 高域エンジン音 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Audio", meta = (AllowPrivateAccess = "true"))
 	UAudioComponent* EngineAudioHigh = nullptr;
 
-	// 回転音
+	/** 回転音 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Audio", meta = (AllowPrivateAccess = "true"))
 	UAudioComponent* RotateAudio = nullptr;
 
-	// 音源（BP登録しない＝C++のDefaults/Detailsでセット）
+	/** 低域エンジン音源 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
 	USoundBase* EngineLowLoopSound = nullptr;
 
+	/** 高域エンジン音源 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
 	USoundBase* EngineHighLoopSound = nullptr;
 
+	/** 回転音源 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (AllowPrivateAccess = "true"))
 	USoundBase* RotateLoopSound = nullptr;
 
+private:
 	// =========================
-	// 変更箇所：Audio パラメータ
+	// Audio Parameter
+	// 主担当：BGM / Audio 関連
 	// =========================
 
-	// 音用：そのフレームの推力入力(0-1)を保持（UpdateMoveで m_ForwardInput を0にしても崩れない）
+	/** 推力入力値（0～1） */
 	float m_ThrustInput01ThisFrame = 0.0f;
 
-	// 音用：そのフレームの回転入力(0-1)（RotPitch/Yaw/Rollから加算ではなく最大で集約）
+	/** 回転入力値（0～1） */
 	float m_RotateInput01 = 0.0f;
 
-	// ---- Engine Low（低域）----
+	// ---- Engine Low ----
 	UPROPERTY(EditAnywhere, Category = "Audio|EngineLow", meta = (AllowPrivateAccess = "true"))
 	float EngineLowPitchMin = 0.9f;
 
@@ -287,7 +397,7 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Audio|EngineLow", meta = (AllowPrivateAccess = "true"))
 	float EngineLowVolMax = 0.6f;
 
-	// ---- Engine High（高域）----
+	// ---- Engine High ----
 	UPROPERTY(EditAnywhere, Category = "Audio|EngineHigh", meta = (AllowPrivateAccess = "true"))
 	float EngineHighPitchMin = 1.0f;
 
@@ -300,10 +410,11 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Audio|EngineHigh", meta = (AllowPrivateAccess = "true"))
 	float EngineHighVolMax = 0.8f;
 
-	// 変化を滑らかにする
+	/** エンジン音補間速度 */
 	UPROPERTY(EditAnywhere, Category = "Audio|Engine", meta = (AllowPrivateAccess = "true"))
 	float EngineInterpSpeed = 8.0f;
 
+	/** エンジン入力平滑化値 */
 	float EngineThrustSmoothed = 0.0f;
 
 	// ---- Rotate ----
@@ -322,14 +433,15 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Audio|Rotate", meta = (AllowPrivateAccess = "true"))
 	float RotateInterpSpeed = 10.0f;
 
+	/** 回転入力平滑化値 */
 	float RotateInputSmoothed = 0.0f;
 
+private:
 	// =========================
-	// ここまで変更箇所
+	// Existing State
+	// 担当外だが見通し改善のため整理
 	// =========================
 
-private:
-	// 既存メンバ
 	TArray<APlanet*> m_pPlanets;
 
 	TArray<AActor*> m_pSocket;
@@ -346,15 +458,15 @@ private:
 	FRotator m_CameraRot;
 	FRotator m_CameraRotInput;
 
-	float m_PreForwardInput;
-	float m_Speed;
-	float m_ForwardInputTime;
-	float m_StrongFOVTimer;		//画角をより広くするタイマー
+	float m_PreForwardInput = 0.0f;
+	float m_Speed = 0.0f;
+	float m_ForwardInputTime = 0.0f;
+	float m_StrongFOVTimer = 0.0f;
 
-	float m_ChangeCtrl;
+	float m_ChangeCtrl = 0.0f;
 
-	bool m_bCollisiON;
-	bool m_bCamConChange;
-	bool m_bAutoRot;
-	bool m_bReturnCource;
+	bool m_bCollisiON = false;
+	bool m_bCamConChange = false;
+	bool m_bAutoRot = false;
+	bool m_bReturnCource = false;
 };

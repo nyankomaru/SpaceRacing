@@ -5,88 +5,104 @@
 #include "Components/BoxComponent.h"
 #include "SimpleTriggerActor.generated.h"
 
-// 前方宣言（ヘッダの依存を軽くする）
+// 前方宣言
 class USoundBase;
 
 /**
  * 汎用トリガーActor
- * ・ゴール
- * ・エフェクト再生
- * ・イベント発火
- * などをBlueprintで実装するための基盤クラス
  *
- * 追加：トリガー発火時に2DSEを鳴らす機能（UI的な確実に聞こえる音）
+ * 主な役割：
+ * ・プレイヤーや他Actorとの重なり判定を行う
+ * ・トリガー発火時のイベントをBlueprintへ渡す
+ * ・必要に応じてトリガーSEを再生する
+ *
+ * 用途例：
+ * ・ゴール地点
+ * ・イベント発火ポイント
+ * ・演出開始用トリガー
  */
 UCLASS()
 class SWING_API ASimpleTriggerActor : public AActor
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 
 public:
-    ASimpleTriggerActor();
+	ASimpleTriggerActor();
 
 protected:
-    /** トリガー判定用Box */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Trigger")
-    UBoxComponent* TriggerBox;
+	// =========================
+	// Trigger Setting
+	// =========================
 
-    /** 1回のみ発火するか */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trigger")
-    bool bTriggerOnce = true;
+	/** トリガー判定用のBox */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Trigger")
+	UBoxComponent* TriggerBox;
 
-    /** 既に発火したか */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Trigger")
-    bool bTriggered = false;
+	/** 1回だけ発火するか */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trigger")
+	bool bTriggerOnce = true;
 
-    // -----------------------------
-    // 追加：トリガーSE（2D）
-    // -----------------------------
+	/** すでに発火済みか */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Trigger")
+	bool bTriggered = false;
 
-    /** トリガー発火時に鳴らすSE（2D）。未設定なら鳴らさない */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Trigger")
-    USoundBase* TriggerSE = nullptr;
+	// =========================
+	// Trigger Audio
+	// =========================
 
-    /** SE音量（0～） */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Trigger", meta = (ClampMin = "0.0"))
-    float TriggerSEVolume = 1.0f;
+	/** トリガー発火時に鳴らすSE。未設定なら再生しない */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Trigger")
+	USoundBase* TriggerSE = nullptr;
 
-    /** SEピッチ（0～） */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Trigger", meta = (ClampMin = "0.0"))
-    float TriggerSEPitch = 1.0f;
+	/** トリガーSEの音量 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Trigger", meta = (ClampMin = "0.0"))
+	float TriggerSEVolume = 1.0f;
+
+	/** トリガーSEのピッチ */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio|Trigger", meta = (ClampMin = "0.0"))
+	float TriggerSEPitch = 1.0f;
 
 protected:
-    /** Overlap開始 */
-    UFUNCTION()
-    void OnTriggerBeginOverlap(
-        UPrimitiveComponent* OverlappedComp,
-        AActor* OtherActor,
-        UPrimitiveComponent* OtherComp,
-        int32 OtherBodyIndex,
-        bool bFromSweep,
-        const FHitResult& SweepResult
-    );
+	// =========================
+	// Overlap Callback
+	// =========================
 
-    /** Overlap終了（拡張用） */
-    UFUNCTION()
-    void OnTriggerEndOverlap(
-        UPrimitiveComponent* OverlappedComp,
-        AActor* OtherActor,
-        UPrimitiveComponent* OtherComp,
-        int32 OtherBodyIndex
-    );
+	/** Overlap開始時に呼ばれる */
+	UFUNCTION()
+	void OnTriggerBeginOverlap(
+		UPrimitiveComponent* OverlappedComp,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex,
+		bool bFromSweep,
+		const FHitResult& SweepResult
+	);
 
-    /**
-     * トリガー発火イベント（BP実装）
-     * ・Actor判定
-     * ・Tag判定
-     * ・演出・遷移
-     */
-    UFUNCTION(BlueprintImplementableEvent, Category = "Trigger")
-    void OnTriggered(AActor* OverlappingActor);
+	/** Overlap終了時に呼ばれる */
+	UFUNCTION()
+	void OnTriggerEndOverlap(
+		UPrimitiveComponent* OverlappedComp,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex
+	);
 
-    /**
-     * トリガー解除イベント（任意）
-     */
-    UFUNCTION(BlueprintImplementableEvent, Category = "Trigger")
-    void OnTriggerReleased(AActor* OverlappingActor);
+protected:
+	// =========================
+	// Blueprint Event
+	// =========================
+
+	/**
+	 * トリガー発火時のイベント
+	 * Blueprint側で演出や遷移処理を実装する
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Trigger")
+	void OnTriggered(AActor* OverlappingActor);
+
+	/**
+	 * トリガー解除時のイベント
+	 * 必要に応じてBlueprint側で実装する
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Trigger")
+	void OnTriggerReleased(AActor* OverlappingActor);
 };

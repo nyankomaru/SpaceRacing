@@ -1,98 +1,105 @@
 #include "SimpleTriggerActor.h"
 
-#include "Kismet/GameplayStatics.h"   // PlaySound2D
-#include "Sound/SoundBase.h"          // USoundBase
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
+
+// =========================
+// コンストラクタ
+// =========================
 
 ASimpleTriggerActor::ASimpleTriggerActor()
 {
-    PrimaryActorTick.bCanEverTick = false;
+	// 毎フレーム更新は不要
+	PrimaryActorTick.bCanEverTick = false;
 
-    TriggerBox = CreateDefaultSubobject<UBoxComponent>(TEXT("TriggerBox"));
-    RootComponent = TriggerBox;
+	// トリガー判定用Boxを作成
+	TriggerBox = CreateDefaultSubobject<UBoxComponent>(TEXT("TriggerBox"));
+	RootComponent = TriggerBox;
 
-    // デフォルトサイズ
-    TriggerBox->SetBoxExtent(FVector(200.f, 200.f, 100.f));
+	// 初期サイズ
+	TriggerBox->SetBoxExtent(FVector(200.0f, 200.0f, 100.0f));
 
-    // Overlap専用
-    TriggerBox->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-    TriggerBox->SetCollisionResponseToAllChannels(ECR_Overlap);
-    TriggerBox->SetCollisionProfileName(TEXT("Trigger"));
-    TriggerBox->SetGenerateOverlapEvents(true);
+	// Overlap専用設定
+	TriggerBox->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	TriggerBox->SetCollisionResponseToAllChannels(ECR_Overlap);
+	TriggerBox->SetCollisionProfileName(TEXT("Trigger"));
+	TriggerBox->SetGenerateOverlapEvents(true);
 
-    // 非表示（必要ならBPで変更）
-    TriggerBox->SetHiddenInGame(true);
+	// ゲーム中は非表示
+	TriggerBox->SetHiddenInGame(true);
 
-    // イベントバインド
-    TriggerBox->OnComponentBeginOverlap.AddDynamic(
-        this, &ASimpleTriggerActor::OnTriggerBeginOverlap
-    );
-
-    TriggerBox->OnComponentEndOverlap.AddDynamic(
-        this, &ASimpleTriggerActor::OnTriggerEndOverlap
-    );
+	// Overlapイベントをバインド
+	TriggerBox->OnComponentBeginOverlap.AddDynamic(this, &ASimpleTriggerActor::OnTriggerBeginOverlap);
+	TriggerBox->OnComponentEndOverlap.AddDynamic(this, &ASimpleTriggerActor::OnTriggerEndOverlap);
 }
+
+// =========================
+// Overlap開始
+// =========================
 
 void ASimpleTriggerActor::OnTriggerBeginOverlap(
-    UPrimitiveComponent* OverlappedComp,
-    AActor* OtherActor,
-    UPrimitiveComponent* OtherComp,
-    int32 OtherBodyIndex,
-    bool bFromSweep,
-    const FHitResult& SweepResult
+	UPrimitiveComponent* OverlappedComp,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex,
+	bool bFromSweep,
+	const FHitResult& SweepResult
 )
 {
-    if (!OtherActor || OtherActor == this)
-    {
-        return;
-    }
+	// 自分自身や無効なActorは無視
+	if (!OtherActor || OtherActor == this)
+	{
+		return;
+	}
 
-    // 多重発火防止
-    if (bTriggerOnce && bTriggered)
-    {
-        return;
-    }
+	// 1回限定トリガーで、すでに発火済みなら無視
+	if (bTriggerOnce && bTriggered)
+	{
+		return;
+	}
 
-    // ここで「発火済み」を確定（これ以降は1回きり）
-    bTriggered = true;
+	// 発火済みとして記録
+	bTriggered = true;
 
 #if !UE_BUILD_SHIPPING
-    UE_LOG(LogTemp, Log, TEXT("Trigger Activated by %s"), *OtherActor->GetName());
+	UE_LOG(LogTemp, Log, TEXT("Trigger Activated by %s"), *OtherActor->GetName());
 #endif
 
-    // -----------------------------
-    // 追加：トリガーSE（2D）を鳴らす
-    // ・UI的に確実に聞こえる
-    // ・距離減衰なし
-    // -----------------------------
-    if (TriggerSE)
-    {
-        UGameplayStatics::PlaySound2D(
-            this,
-            TriggerSE,
-            TriggerSEVolume,
-            TriggerSEPitch
-        );
-    }
+	// 必要ならトリガーSEを2D再生
+	if (TriggerSE)
+	{
+		UGameplayStatics::PlaySound2D(
+			this,
+			TriggerSE,
+			TriggerSEVolume,
+			TriggerSEPitch
+		);
+	}
 
-    // Blueprint側に処理委譲（演出、フェード、レベル遷移など）
-    OnTriggered(OtherActor);
+	// 実際の処理はBlueprint側へ委譲
+	OnTriggered(OtherActor);
 }
 
+// =========================
+// Overlap終了
+// =========================
+
 void ASimpleTriggerActor::OnTriggerEndOverlap(
-    UPrimitiveComponent* OverlappedComp,
-    AActor* OtherActor,
-    UPrimitiveComponent* OtherComp,
-    int32 OtherBodyIndex
+	UPrimitiveComponent* OverlappedComp,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex
 )
 {
-    if (!OtherActor || OtherActor == this)
-    {
-        return;
-    }
+	// 自分自身や無効なActorは無視
+	if (!OtherActor || OtherActor == this)
+	{
+		return;
+	}
 
 #if !UE_BUILD_SHIPPING
-    UE_LOG(LogTemp, Log, TEXT("Trigger Released by %s"), *OtherActor->GetName());
+	UE_LOG(LogTemp, Log, TEXT("Trigger Released by %s"), *OtherActor->GetName());
 #endif
 
-    OnTriggerReleased(OtherActor);
+	OnTriggerReleased(OtherActor);
 }

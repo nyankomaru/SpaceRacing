@@ -3,80 +3,61 @@
 #include "Components/AudioComponent.h"
 #include "Sound/SoundBase.h"
 
+// =========================
+// コンストラクタ
+// =========================
+
 ABGMManager::ABGMManager()
 {
-	// =========================
-	// 最適化：Tick無効化
-	// =========================
-	// BGM 管理は毎フレーム処理が不要なので Tick を止めて負荷を抑えます。
+	// BGM管理では毎フレーム更新が不要なため、Tickは無効化
 	PrimaryActorTick.bCanEverTick = false;
 
-	// =========================
-	// 構成：AudioComponent作成
-	// =========================
-	// BGM は「Actor の位置」に意味を持たないため、RootComponent にしてシンプルに管理します。
+	// BGM再生用のAudioComponentを作成
 	BGMComp = CreateDefaultSubobject<UAudioComponent>(TEXT("BGMComp"));
 	RootComponent = BGMComp;
 
-	// =========================
-	// 再生制御：自動再生OFF
-	// =========================
-	// 生成直後に勝手に鳴らさず、BeginPlay または外部APIで明示的に再生開始します。
+	// 自動再生は行わず、必要なタイミングで再生する
 	BGMComp->bAutoActivate = false;
 
-	// =========================
-	// 再生特性：UIサウンド扱い
-	// =========================
-	// 目的：
-	// ・距離減衰などの影響を受けにくくしたい
-	// ・常に同じ音量感で聞かせたい
-	// といった「BGM的な鳴らし方」に寄せるための設定です。
+	// BGMとして扱いやすいようにUIサウンド設定にする
 	BGMComp->bIsUISound = true;
 
-	// =========================
-	// ループについて
-	// =========================
-	// ループさせたい BGM は、基本的に音源（SoundWave / SoundCue）側で Loop 設定を行います。
+	// ループ設定は音源側で行う想定
 }
+
+// =========================
+// 開始時処理
+// =========================
 
 void ABGMManager::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// =========================
-	// 起動時BGM：自動再生
-	// =========================
-	// レベル配置のみで BGM を鳴らす運用の場合は、ここで DefaultBGM を再生します。
+	// 必要なら開始時にデフォルトBGMを再生
 	if (bAutoPlayDefaultBGM && DefaultBGM)
 	{
 		PlayBGM(DefaultBGM, 0.5f);
 	}
 }
 
+// =========================
+// BGM再生
+// =========================
+
 void ABGMManager::PlayBGM(USoundBase* BGM, float FadeInTime)
 {
-	// =========================
-	// 安全策：Nullチェック
-	// =========================
-	// 設定ミスや未初期化によるクラッシュを防ぎます。
+	// 音源やコンポーネントが無い場合は何もしない
 	if (!BGMComp || !BGM)
 	{
 		return;
 	}
 
-	// =========================
-	// 音源設定
-	// =========================
-	// 再生対象の音源を AudioComponent に紐づけます。
+	// 再生する音源を設定
 	BGMComp->SetSound(BGM);
 
-	// =========================
-	// 再生：フェードイン or 即時
-	// =========================
-	// FadeInTime > 0 ならフェードインしながら開始、0 なら即時開始。
+	// フェードイン指定があればフェード付きで再生
 	if (FadeInTime > 0.0f)
 	{
-		// FadeIn(フェード時間, 最終音量)
 		BGMComp->FadeIn(FadeInTime, 1.0f);
 	}
 	else
@@ -85,23 +66,21 @@ void ABGMManager::PlayBGM(USoundBase* BGM, float FadeInTime)
 	}
 }
 
+// =========================
+// BGM停止
+// =========================
+
 void ABGMManager::StopBGM(float FadeOutTime)
 {
-	// =========================
-	// 安全策：Nullチェック
-	// =========================
+	// コンポーネントが無い場合は何もしない
 	if (!BGMComp)
 	{
 		return;
 	}
 
-	// =========================
-	// 停止：フェードアウト or 即時
-	// =========================
-	// FadeOutTime > 0 ならフェードアウトしながら停止、0 なら即時停止。
+	// フェードアウト指定があれば徐々に停止
 	if (FadeOutTime > 0.0f)
 	{
-		// FadeOut(フェード時間, 最終音量)
 		BGMComp->FadeOut(FadeOutTime, 0.0f);
 	}
 	else
@@ -110,45 +89,24 @@ void ABGMManager::StopBGM(float FadeOutTime)
 	}
 }
 
+// =========================
+// BGM切り替え
+// =========================
+
 void ABGMManager::ChangeBGM(USoundBase* NewBGM, float FadeOutTime, float FadeInTime)
 {
-	// =========================
-	// 安全策：Nullチェック
-	// =========================
+	// 音源やコンポーネントが無い場合は何もしない
 	if (!BGMComp || !NewBGM)
 	{
 		return;
 	}
 
-	// =========================
-	// 切替方針：簡易版（初期実装）
-	// =========================
-	// 理想：
-	// ・FadeOut 完了後に SetSound → FadeIn（曲頭が綺麗に出る）
-	//
-	// ただし初期実装では、体感上の違和感が出にくい範囲で手順を簡略化します。
-	//
-	// ・再生中：FadeOut 開始 → すぐ差し替え → FadeIn（または即再生）
-	// ・停止中：そのまま PlayBGM 相当で再生開始
-	//
-	// 仕上げを重視する場合：
-	// ・Timer を使い「FadeOutTime 秒後に SetSound→FadeIn」へ拡張できます。
-
+	// 再生中なら一度フェードアウトをかけてから差し替える
 	if (BGMComp->IsPlaying() && FadeOutTime > 0.0f)
 	{
-		// =========================
-		// 再生中：フェードアウト開始
-		// =========================
 		BGMComp->FadeOut(FadeOutTime, 0.0f);
-
-		// =========================
-		// 曲差し替え（簡易版のため即時）
-		// =========================
 		BGMComp->SetSound(NewBGM);
 
-		// =========================
-		// 新曲再生：フェードイン or 即時
-		// =========================
 		if (FadeInTime > 0.0f)
 		{
 			BGMComp->FadeIn(FadeInTime, 1.0f);
@@ -160,10 +118,7 @@ void ABGMManager::ChangeBGM(USoundBase* NewBGM, float FadeOutTime, float FadeInT
 	}
 	else
 	{
-		// =========================
-		// 停止中：通常再生
-		// =========================
-		// 念のため停止状態を明確にしてから再生開始します。
+		// 停止中ならそのまま再生開始
 		BGMComp->Stop();
 		PlayBGM(NewBGM, FadeInTime);
 	}
