@@ -10,7 +10,7 @@
 ---
 
 ## デモ動画
-▶ （ここに動画リンクを記載）
+▶ （https://drive.google.com/file/d/1TXRazairDmZXDxvpQ4s8hs4pVnSQVDha/view?usp=drive_link）
 
 ---
 
@@ -111,6 +111,6 @@ BGMの再生・停止・切り替えを一つのActorに集約しました。
 ---
 
 ## プログラム以外の制作物
-▶ （概要書・仕様書・ロゴデザイン等のURLをここに記載）
+▶ （https://drive.google.com/drive/folders/1WGC1Uuj7BRVzFE3VOMv1khFPjR1NP94A?usp=drive_link）
 
 ---
